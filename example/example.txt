@@ -1,0 +1,6 @@
+group1, process1, ./example/lazydate.sh 1
+group1, process2, ./example/lazydate.sh 2
+group2, process1, ./example/lazydate.sh 3
+group2, process2, ./example/lazyfail.sh 4
+group3, process1, ./example/lazydate.sh 5
+group3, process2, error
