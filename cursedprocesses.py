@@ -77,7 +77,7 @@ class Process():
 
 	def start(self):
 		try:
-			self.p = subprocess.Popen(shlex.split(self.cmd), bufsize=1, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+			self.p = subprocess.Popen(shlex.split(self.cmd), bufsize=0, close_fds=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 			self.t = Thread(target=read_process_output, args=(self.p.stdout, self.q))
 			self.t.daemon = True
 			self.t.start()
@@ -112,13 +112,17 @@ class Process():
 		return "#"
 
 
-def mainloop(processgroups, parallel, total):
+def mainloop(processgroups, parallel, total, autostart):
 	screen = curses.initscr()
 	#curses.cbreak()
 	#curses.noecho()
 
 	#sys.stdin = os.fdopen(sys.stdin.fileno(), 'r', 0)  # stdin needs to be totally unbuffered, otherwise arrow keys work badly
 	screen.keypad(1)  # Get arrow keys to return ^[[A ^[[B ^[[C ^[[D
+
+	curses.start_color()
+	curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+	curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
 
 	processcount = 0
 	for group in processgroups.values():
@@ -143,7 +147,7 @@ def mainloop(processgroups, parallel, total):
 			screen.clear()
 			screen.border(0)
 
-			screen.addstr(2, 4, "---- %06u ---- (ENTER - start/retry, BACKSPACE - terminate, k - kill, q - quit)" % (loop))
+			screen.addstr(2, 4, "---- %06u ---- (autostart=%s)" % (loop, autostart))
 
 			i = 0
 			updates = 0
@@ -152,6 +156,7 @@ def mainloop(processgroups, parallel, total):
 				running_group = 0
 
 				for p in processgroups[group]:
+					colorpair = 0
 
 					if p.update():
 						updates += 1
@@ -161,11 +166,16 @@ def mainloop(processgroups, parallel, total):
 						running_group += 1
 						running_total += 1
 					elif status == "#":
-						if running_total < total:
-							if running_group < parallel:
-								p.start()
-								running_group += 1
-								running_total += 1
+						if autostart:
+							if running_total < total:
+								if running_group < parallel:
+									p.start()
+									running_group += 1
+									running_total += 1
+					elif status == 0:
+						colorpair = 2
+					else:
+						colorpair = 1
 
 					if enter == i:
 						if status != "*" and status != 0:
@@ -179,13 +189,14 @@ def mainloop(processgroups, parallel, total):
 						if status == "*":
 							p.kill()
 
-					screen.addstr(3 + i, 4, "%s %s (%s): %s" % (group, p.name, status, p.text))
+					screen.addstr(3 + i, 4, "%s %s (%s): %s" % (group, p.name, status, p.text), curses.color_pair(colorpair))
 					i += 1
 
 			screen.addstr(3 + i, 4, "---- ------ ---- (%s)" % (x))
 
 			screen.addstr(3 + pointer, 2, "*")
-			screen.addstr(3 + i + 1, 4, "")  # put the cursor here
+			screen.addstr(3 + i + 1, 4, "(ENTER - start/retry, BACKSPACE - terminate, k - kill, a - toggle autostart, q - quit)")
+			screen.addstr(3 + i + 2, 4, "")  # put the cursor here
 
 			enter = processcount
 			terminate = processcount
@@ -208,6 +219,8 @@ def mainloop(processgroups, parallel, total):
 					pointer = (pointer + 1) % processcount
 				elif key == "k":
 					kill = pointer
+				elif key == "a":
+					autostart = not autostart
 				elif key == "q":
 					interrupted = True
 				x = key
@@ -261,11 +274,12 @@ def main():
 	parser.add_argument("input", help="Command file")
 	parser.add_argument("--parallel", type=int, default=1, help="Number of parallel processes per group.")
 	parser.add_argument("--total", type=int, default=7, help="Number of total parallel processes.")
+	parser.add_argument("--manual", default=False, action="store_true", help="Processes must be started manually.")
 	args = parser.parse_args()
 
 	try:
 		processes = read_commands(args.input)
-		mainloop(processes, args.parallel, args.total)
+		mainloop(processes, args.parallel, args.total, not args.manual)
 	except AttributeError as e:
 		print("ERROR: %s" % (e.message))
 
