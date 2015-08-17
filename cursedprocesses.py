@@ -258,10 +258,11 @@ def read_commands(commandfile):
 			for row in reader:
 				i += 1
 				group = row["group"].lstrip().rstrip()
-				if group not in groups:
-					groups[group] = []
+				if group.startswith("#") is False:
+					if group not in groups:
+						groups[group] = []
 
-				groups[group].append(Process(row["name"].lstrip().rstrip(), row["cmd"].lstrip().rstrip()))
+					groups[group].append(Process(row["name"].lstrip().rstrip(), row["cmd"].lstrip().rstrip()))
 		except AttributeError:
 			raise AttributeError("Can't make sense of command row %u!" % (i))
 
@@ -273,7 +274,7 @@ def main():
 	parser = argparse.ArgumentParser(description="Application arguments", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 	parser.add_argument("input", help="Command file")
 	parser.add_argument("--parallel", type=int, default=1, help="Number of parallel processes per group.")
-	parser.add_argument("--total", type=int, default=7, help="Number of total parallel processes.")
+	parser.add_argument("--total", type=int, default=12, help="Number of total parallel processes.")
 	parser.add_argument("--manual", default=False, action="store_true", help="Processes must be started manually.")
 	args = parser.parse_args()
 
