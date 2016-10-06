@@ -1,20 +1,18 @@
 #!/usr/bin/env python
 
-"""cursedprocesses.py: Run multiple processes in parallel and get their output through a curses interface"""
+"""runner.py: Run multiple processes in parallel and get their output through a curses interface"""
 
-__author__  = "Raido Pahtma"
-__license__ = "MIT"
-
-import os
 import sys
 import subprocess
 import curses
-import select
 import shlex
 import time
 import string
 import Queue
-from threading  import Thread
+from threading import Thread
+
+__author__ = "Raido Pahtma"
+__license__ = "MIT"
 
 
 def read_process_output(process_output, queue):
@@ -93,7 +91,7 @@ class Process():
 
     def update(self):
         try:
-            line = self.q.get(False) # (timeout=0.01)
+            line = self.q.get(False)  # (timeout=0.01)
             line = line.lstrip().rstrip()
             if len(line) > 0:
                 self.text = line
@@ -114,10 +112,10 @@ class Process():
 
 def mainloop(processgroups, parallel, total, autostart):
     screen = curses.initscr()
-    #curses.cbreak()
-    #curses.noecho()
+    # curses.cbreak()
+    # curses.noecho()
 
-    #sys.stdin = os.fdopen(sys.stdin.fileno(), 'r', 0)  # stdin needs to be totally unbuffered, otherwise arrow keys work badly
+    # sys.stdin = os.fdopen(sys.stdin.fileno(), 'r', 0)  # stdin needs to be totally unbuffered or arrow keys work badly
     screen.keypad(1)  # Get arrow keys to return ^[[A ^[[B ^[[C ^[[D
 
     curses.start_color()
@@ -262,8 +260,8 @@ def read_commands(commandfile):
     groups = {}
     with open(commandfile, 'rb') as f:
         reader = csv.DictReader(f, fieldnames=("group", "name", "cmd"), delimiter=',')
+        i = 0
         try:
-            i = 0
             for row in reader:
                 i += 1
                 group = row["group"].lstrip().rstrip()
@@ -273,14 +271,15 @@ def read_commands(commandfile):
 
                     groups[group].append(Process(row["name"].lstrip().rstrip(), row["cmd"].lstrip().rstrip()))
         except AttributeError:
-            raise AttributeError("Can't make sense of command row %u!" % (i))
+            raise AttributeError("Can't make sense of command row {:u}!".format(i))
 
     return groups
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Application arguments", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description="Application arguments",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("input", help="Command file")
     parser.add_argument("--parallel", type=int, default=1, help="Number of parallel processes per group.")
     parser.add_argument("--total", type=int, default=12, help="Number of total parallel processes.")
@@ -291,8 +290,8 @@ def main():
         processes = read_commands(args.input)
         mainloop(processes, args.parallel, args.total, not args.manual)
     except AttributeError as e:
-        print("ERROR: %s" % (e.message))
+        print("ERROR: {}".format(e.message))
 
 
 if __name__ == '__main__':
-     main()
+    main()
