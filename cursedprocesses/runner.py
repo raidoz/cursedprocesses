@@ -4,12 +4,14 @@
 
 import sys
 import subprocess
+import signal
 import curses
 import shlex
 import time
-import string
 import Queue
 from threading import Thread
+
+from .stinner import read_stdin
 
 __author__ = "Raido Pahtma"
 __license__ = "MIT"
@@ -19,47 +21,6 @@ def read_process_output(process_output, queue):
     for line in iter(process_output.readline, b''):
         queue.put(line)
     process_output.close()
-
-
-def read_stdin(input, queue):
-    """
-    Reading from stdin in a thread and then communicating through a queue.
-    Could not get curses getch to perform reasonably and even this approach acts strangly sometimes(under load).
-    Some threads don't seem to get equal attention or something ... really strange.
-    """
-    escape = False
-    arrow = False
-    while True:
-        keys = input.read(1)
-        for key in list(keys):
-            if ord(key) == 0x0D:
-                queue.put("ENTER")
-            elif ord(key) == 0x7F:
-                queue.put("BACKSPACE")
-            elif escape:
-                escape = False
-                if ord(key) == 0x4F:
-                    arrow = True
-                else:
-                    queue.put("escape %02X" % (ord(key)))
-            elif arrow:
-                arrow = False
-                if key == "A":
-                    queue.put("UP")
-                elif key == "B":
-                    queue.put("DOWN")
-                elif key == "C":
-                    queue.put("RIGHT")
-                elif key == "D":
-                    queue.put("LEFT")
-                else:
-                    queue.put("arrow %02X" % (ord(key)))
-            elif ord(key) == 0x1B:
-                escape = True
-            elif key in string.printable:
-                queue.put(key)
-            else:
-                queue.put("key %02X" % (ord(key)))
 
 
 class Process():
@@ -75,13 +36,17 @@ class Process():
 
     def start(self):
         try:
-            self.p = subprocess.Popen(shlex.split(self.cmd), bufsize=0, close_fds=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            self.p = subprocess.Popen(shlex.split(self.cmd), bufsize=0, close_fds=True, stdin=subprocess.PIPE,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             self.t = Thread(target=read_process_output, args=(self.p.stdout, self.q))
             self.t.daemon = True
             self.t.start()
         except Exception as e:
             self.text = "ERROR: %s" % (e)
             self.error = True
+
+    def interrupt(self):
+        self.p.send_signal(signal.SIGINT)
 
     def stop(self):
         self.p.terminate()
@@ -108,6 +73,15 @@ class Process():
                 return "*"
             return s
         return "#"
+
+    def reset(self):
+        if self.status() == "*":
+            self.p.kill()
+        self.text = ""
+        self.p = None
+        self.t = None
+        self.q = Queue.Queue()
+        self.error = False
 
 
 def mainloop(processgroups, parallel, total, autostart):
@@ -136,6 +110,7 @@ def mainloop(processgroups, parallel, total, autostart):
     enter = processcount
     terminate = processcount
     kill = processcount
+    interrupt = processcount
 
     x = "#"
 
@@ -154,7 +129,15 @@ def mainloop(processgroups, parallel, total, autostart):
             updates = 0
             running_total = 0
             for group in sorted(processgroups):
+                for p in processgroups[group]:
+                    if p.status() == "*":
+                        running_total += 1
+
+            for group in sorted(processgroups):
                 running_group = 0
+                for p in processgroups[group]:
+                    if p.status() == "*":
+                        running_group += 1
 
                 for p in processgroups[group]:
                     colorpair = 0
@@ -164,8 +147,7 @@ def mainloop(processgroups, parallel, total, autostart):
 
                     status = p.status()
                     if status == "*":
-                        running_group += 1
-                        running_total += 1
+                        pass
                     elif status == "#":
                         if autostart:
                             if running_total < total:
@@ -179,7 +161,7 @@ def mainloop(processgroups, parallel, total, autostart):
                         colorpair = 1
 
                     if enter == i:
-                        if status != "*" and status != 0:
+                        if status != "*":
                             p.start()
                             running_group += 1
                             running_total += 1
@@ -189,9 +171,13 @@ def mainloop(processgroups, parallel, total, autostart):
                     elif kill == i:
                         if status == "*":
                             p.kill()
+                    elif interrupt == i:
+                        if status == "*":
+                            p.interrupt()
 
                     try:
-                        screen.addstr(3 + i, 4, "%s %s (%s): %s" % (group, p.name, status, p.text), curses.color_pair(colorpair))
+                        screen.addstr(3 + i, 4, "%s %s (%s): %s" % (group, p.name, status, p.text),
+                                      curses.color_pair(colorpair))
                     except curses.error:
                         pass
                     i += 1
@@ -200,7 +186,7 @@ def mainloop(processgroups, parallel, total, autostart):
                 screen.addstr(3 + i, 4, "---- ------ ---- (%s)" % (x))
 
                 screen.addstr(3 + pointer, 2, "*")
-                screen.addstr(3 + i + 1, 4, "(ENTER - start/retry, BACKSPACE - terminate, k - kill, a - toggle autostart, q - quit)")
+                screen.addstr(3 + i + 1, 4, "(ENTER - start/retry, c - interrupt, t - terminate, k - kill, a - toggle autostart, r - reset failed, q - quit)")
                 screen.addstr(3 + i + 2, 4, "")  # put the cursor here
             except curses.error:
                 pass
@@ -208,6 +194,7 @@ def mainloop(processgroups, parallel, total, autostart):
             enter = processcount
             terminate = processcount
             kill = processcount
+            interrupt = processcount
 
             screen.refresh()
 
@@ -221,13 +208,35 @@ def mainloop(processgroups, parallel, total, autostart):
                     if pointer == 0:
                         pointer = processcount - 1
                     else:
-                        pointer = pointer - 1
+                        pointer -= 1
                 elif key == "DOWN":
                     pointer = (pointer + 1) % processcount
+                elif key == "HOME":
+                    pointer = 0
+                elif key == "END":
+                    pointer = processcount - 1
+                elif key == "PAGE_UP":
+                    pointer -= 10
+                    if pointer < 0:
+                        pointer = 0
+                elif key == "PAGE_DOWN":
+                    pointer += 10
+                    if pointer >= processcount:
+                        pointer = processcount - 1
                 elif key == "k":
                     kill = pointer
+                elif key == "t":
+                    terminate = pointer
+                elif key == "c":
+                    interrupt = pointer
                 elif key == "a":
                     autostart = not autostart
+                elif key == "r":
+                    for group in processgroups.keys():
+                        for p in processgroups[group]:
+                            s = p.status()
+                            if s != "*" and s != "#" and s != 0:
+                                p.reset()
                 elif key == "q":
                     interrupted = True
                 x = key
