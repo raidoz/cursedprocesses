@@ -61,7 +61,7 @@ class Process():
             if len(line) > 0:
                 self.text = line
                 return True
-        except Queue.Empty:
+        except queue.Empty:
             return False
 
     def status(self):
@@ -240,7 +240,7 @@ def mainloop(processgroups, parallel, total, autostart):
                 elif key == "q":
                     interrupted = True
                 x = key
-            except Queue.Empty:
+            except queue.Empty:
                 pass
 
             loop += 1
@@ -267,7 +267,7 @@ def mainloop(processgroups, parallel, total, autostart):
 def read_commands(commandfile):
     import csv
     groups = {}
-    with open(commandfile, 'rb') as f:
+    with open(commandfile, 'r') as f:
         reader = csv.DictReader(f, fieldnames=("group", "name", "cmd"), delimiter=',')
         i = 0
         try:
