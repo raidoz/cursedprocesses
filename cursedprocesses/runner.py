@@ -280,7 +280,7 @@ def read_commands(commandfile):
 
                     groups[group].append(Process(row["name"].lstrip().rstrip(), row["cmd"].lstrip().rstrip()))
         except AttributeError:
-            raise AttributeError("Can't make sense of command row {:u}!".format(i))
+            raise AttributeError("Can't make sense of command row {:d}: '{}'!".format(i, row))
 
     return groups
 
@@ -299,7 +299,7 @@ def main():
         processes = read_commands(args.input)
         mainloop(processes, args.parallel, args.total, not args.manual)
     except AttributeError as e:
-        print("ERROR: {}".format(e.message))
+        print("ERROR: {}".format(e))
 
 
 if __name__ == '__main__':
