@@ -8,7 +8,7 @@ import signal
 import curses
 import shlex
 import time
-import Queue
+import queue
 from threading import Thread
 
 from .stinner import read_stdin
@@ -31,7 +31,7 @@ class Process():
         self.text = ""
         self.p = None
         self.t = None
-        self.q = Queue.Queue()
+        self.q = queue.Queue()
         self.error = False
 
     def start(self):
@@ -80,7 +80,7 @@ class Process():
         self.text = ""
         self.p = None
         self.t = None
-        self.q = Queue.Queue()
+        self.q = queue.Queue()
         self.error = False
 
 
@@ -100,7 +100,7 @@ def mainloop(processgroups, parallel, total, autostart):
     for group in processgroups.values():
         processcount += len(group)
 
-    inqueue = Queue.Queue()
+    inqueue = queue.Queue()
     inthread = Thread(target=read_stdin, args=(sys.stdin, inqueue))
     inthread.daemon = True
     inthread.start()
