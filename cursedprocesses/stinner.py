@@ -1,5 +1,5 @@
 """stinner.py: Read from stdin with curses and figure out what keys were pressed."""
-import Queue
+import queue
 import curses
 import string
 from threading import Thread
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     # curses.noecho()
     screen.keypad(1)  # Get arrow keys to return ^[[A ^[[B ^[[C ^[[D
 
-    inqueue = Queue.Queue()
+    inqueue = queue.Queue()
     inthread = Thread(target=read_stdin, args=(sys.stdin, inqueue))
     inthread.daemon = True
     inthread.start()
@@ -93,7 +93,7 @@ if __name__ == '__main__':
         try:
             k = inqueue.get(False)
             print(k)
-        except Queue.Empty:
+        except queue.Empty:
             pass
         except KeyboardInterrupt:
             break

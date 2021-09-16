@@ -8,7 +8,7 @@ import signal
 import curses
 import shlex
 import time
-import Queue
+import queue
 from threading import Thread
 
 from .stinner import read_stdin
@@ -31,7 +31,7 @@ class Process():
         self.text = ""
         self.p = None
         self.t = None
-        self.q = Queue.Queue()
+        self.q = queue.Queue()
         self.error = False
 
     def start(self):
@@ -61,7 +61,7 @@ class Process():
             if len(line) > 0:
                 self.text = line
                 return True
-        except Queue.Empty:
+        except queue.Empty:
             return False
 
     def status(self):
@@ -80,7 +80,7 @@ class Process():
         self.text = ""
         self.p = None
         self.t = None
-        self.q = Queue.Queue()
+        self.q = queue.Queue()
         self.error = False
 
 
@@ -100,7 +100,7 @@ def mainloop(processgroups, parallel, total, autostart):
     for group in processgroups.values():
         processcount += len(group)
 
-    inqueue = Queue.Queue()
+    inqueue = queue.Queue()
     inthread = Thread(target=read_stdin, args=(sys.stdin, inqueue))
     inthread.daemon = True
     inthread.start()
@@ -240,7 +240,7 @@ def mainloop(processgroups, parallel, total, autostart):
                 elif key == "q":
                     interrupted = True
                 x = key
-            except Queue.Empty:
+            except queue.Empty:
                 pass
 
             loop += 1
@@ -267,7 +267,7 @@ def mainloop(processgroups, parallel, total, autostart):
 def read_commands(commandfile):
     import csv
     groups = {}
-    with open(commandfile, 'rb') as f:
+    with open(commandfile, 'r') as f:
         reader = csv.DictReader(f, fieldnames=("group", "name", "cmd"), delimiter=',')
         i = 0
         try:
@@ -280,7 +280,7 @@ def read_commands(commandfile):
 
                     groups[group].append(Process(row["name"].lstrip().rstrip(), row["cmd"].lstrip().rstrip()))
         except AttributeError:
-            raise AttributeError("Can't make sense of command row {:u}!".format(i))
+            raise AttributeError("Can't make sense of command row {:d}: '{}'!".format(i, row))
 
     return groups
 
@@ -299,7 +299,7 @@ def main():
         processes = read_commands(args.input)
         mainloop(processes, args.parallel, args.total, not args.manual)
     except AttributeError as e:
-        print("ERROR: {}".format(e.message))
+        print("ERROR: {}".format(e))
 
 
 if __name__ == '__main__':
